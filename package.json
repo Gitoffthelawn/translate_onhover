@@ -6,7 +6,8 @@
     "dev": "webpack --watch",
     "test": "node --test",
     "lint": "eslint --ignore-pattern dist .",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "postinstall": "playwright install chromium"
   },
   "devDependencies": {
     "@babel/core": "7.20.7",
@@ -17,6 +18,7 @@
     "debug": "^4.3.4",
     "eslint": "^8.30.0",
     "husky": "^8.0.2",
+    "playwright": "^1.62.1",
     "uglifyjs-webpack-plugin": "^2.2.0",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.1",
