@@ -2,3 +2,5 @@ dist
 node_modules
 .DS_Store
 .mise.toml
+coverage
+.coverage-e2e-raw

@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: '0 */6 * * *'
 jobs:
+  # Cheap canary against Google changing the translate API's response
+  # format, independent of any code change - runs on every push AND on the
+  # schedule above. Deliberately just this one file, not the full unit
+  # suite: it needs to stay fast and focused so it's worth running every 6
+  # hours.
   test-endpoints:
     runs-on: ubuntu-latest
     steps:
@@ -24,4 +29,55 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-      - run: yarn test
+      - run: yarn test:endpoints
+  # Full unit suite with 100% coverage enforcement - only meaningful after
+  # an actual code change, so this doesn't need the 6-hourly schedule.
+  test-unit:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: yarn
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('yarn.lock') }}
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - run: yarn test:unit:coverage
+  test-e2e:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: yarn
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('yarn.lock') }}
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      # Loading an unpacked MV3 extension needs a headed browser - Chromium's
+      # headless mode never starts the extension's service worker - so this
+      # runs under a virtual display instead.
+      - run: xvfb-run --auto-servernum yarn test:e2e:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-coverage-report
+          path: coverage/e2e
