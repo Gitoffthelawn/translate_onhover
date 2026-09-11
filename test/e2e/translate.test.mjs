@@ -64,10 +64,19 @@ describe('translate flows', () => {
     await gotoFixture(page, `${fixtures.baseUrl}/sentence.html`)
     const box = await page.locator('#sentence').boundingBox()
 
-    await page.mouse.move(box.x + 5, box.y + box.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 10 })
-    await page.mouse.up()
+    // A drag doesn't reliably produce a real text selection every time
+    // under CI's slower, more contended timing - retry rather than let a
+    // missed drag surface as a 15s "no popup ever showed up" timeout below,
+    // which wouldn't say why.
+    let selectedText = ''
+    for (let attempt = 0; attempt < 5 && !selectedText; attempt++) {
+      await page.mouse.move(box.x + 5, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 20 })
+      await page.mouse.up()
+      selectedText = await page.evaluate(() => window.getSelection().toString())
+    }
+    assert.ok(selectedText, 'drag-select never produced a text selection')
 
     const text = await waitForPopupText(page)
     assert.match(text, /jaunes/i)

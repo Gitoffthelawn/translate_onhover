@@ -99,8 +99,13 @@ export async function resetUrlLists(extension) {
 
 // Asserts no popup shows up within `wait` ms - used for negative cases
 // (except_urls, disabled everywhere, etc.) where we expect nothing to
-// happen.
+// happen. Any popup left over from an earlier translation in the same test
+// file is still mid-fadeOut (contentscript.js's removePopup animates it out
+// before removing the element), so wait for that to actually finish first -
+// otherwise this can see stale leftover text and mistake it for a new,
+// unwanted popup.
 export async function popupStaysEmpty(page, { wait = 2000 } = {}) {
+  await page.locator('transover-popup').waitFor({ state: 'detached', timeout: 10000 })
   await page.waitForTimeout(wait)
   return (await getPopupText(page)) === null
 }
