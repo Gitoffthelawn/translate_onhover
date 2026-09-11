@@ -1,23 +1,29 @@
-import { describe, it, before, after } from 'node:test'
+import { describe, it, beforeEach, after } from 'node:test'
 import assert from 'node:assert'
 import { chromium } from 'playwright'
 import { generateUrls, parseResponse } from '../lib/apiClient.mjs'
 
 // Google's bot detection returns 429 for plain Node/curl requests to
 // translate.googleapis.com, but not for requests made from a real browser.
-// So these fetches run inside an actual Chromium page.
-let browser, page
+// So these fetches run inside an actual Chromium page - a fresh browser
+// per test, not shared across the file: reusing one page for all six
+// requests here made the sixth one fail outright every time (confirmed
+// directly - the very same URL succeeds immediately from a brand new
+// page), so whatever bot-detection signal is at play tracks per-page, not
+// per-IP.
+let browser
 
-before(async () => {
+beforeEach(async () => {
+  await browser?.close()
   browser = await chromium.launch()
-  page = await browser.newPage()
 })
 
 after(async () => {
-  await browser.close()
+  await browser?.close()
 })
 
 async function fetchJson(url) {
+  const page = await browser.newPage()
   return page.evaluate(async (u) => {
     const response = await fetch(u)
     if (!response.ok) {

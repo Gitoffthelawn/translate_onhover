@@ -99,13 +99,18 @@ export async function resetUrlLists(extension) {
 
 // Asserts no popup shows up within `wait` ms - used for negative cases
 // (except_urls, disabled everywhere, etc.) where we expect nothing to
-// happen. Any popup left over from an earlier translation in the same test
-// file is still mid-fadeOut (contentscript.js's removePopup animates it out
-// before removing the element), so wait for that to actually finish first -
-// otherwise this can see stale leftover text and mistake it for a new,
-// unwanted popup.
+// happen. Removes any popup left over from an earlier translation in the
+// same test file first: contentscript.js only clears an existing popup as
+// a side effect of a real mousemove or a new translation, and this isn't
+// testing that mechanism - relying on it just to get to a clean starting
+// point made this flaky (a stale popup masquerading as "a new one showed
+// up"). Direct removal sidesteps that; the DOM is shared across the page's
+// worlds, so it doesn't matter that the element was created by the content
+// script's isolated world.
 export async function popupStaysEmpty(page, { wait = 2000 } = {}) {
-  await page.locator('transover-popup').waitFor({ state: 'detached', timeout: 10000 })
+  await page.evaluate(() => {
+    document.querySelectorAll('transover-popup').forEach(el => el.remove())
+  })
   await page.waitForTimeout(wait)
   return (await getPopupText(page)) === null
 }
