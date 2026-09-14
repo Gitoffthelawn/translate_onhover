@@ -4,23 +4,31 @@ import { fileURLToPath } from 'node:url'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dumpPageCoverage } from './coverage.mjs'
+import { stubTranslateApi } from './googleStub.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.resolve(__dirname, '../../../dist')
 
-// Loading an unpacked MV3 extension requires a headed browser: Chromium's
-// "new" headless mode never starts the extension's service worker (tested
-// directly - it just hangs). CI runs this headed under Xvfb.
+// channel: 'chromium' opts into Chromium's new headless mode (the full
+// browser binary, not the stripped-down "headless shell" that plain
+// headless: true gets by default) - only the new mode starts an MV3
+// extension's service worker at all.
 export async function launchExtension() {
   const userDataDir = await mkdtemp(path.join(tmpdir(), 'transover-e2e-'))
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    channel: 'chromium',
+    headless: true,
     ignoreHTTPSErrors: true, // the fixture server uses a throwaway self-signed cert
     args: [
       `--disable-extensions-except=${distPath}`,
       `--load-extension=${distPath}`,
     ],
   })
+  // Every e2e test replays a captured Google response rather than calling
+  // the real API - see googleStub.mjs. A test after this one that needs a
+  // specific real failure mode (429, malformed response, etc.) registers
+  // its own context.route() for the same pattern, which takes priority.
+  await stubTranslateApi(context)
 
   const serviceWorker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
   const extensionId = serviceWorker.url().split('/')[2]
@@ -37,33 +45,71 @@ export async function launchExtension() {
   }
 }
 
-// Navigates to a fixture page and gives the content script's own (async)
-// options load a moment to resolve. contentscript.js only arms its
-// mousestop-scheduling timer once `options` has loaded, so a single
-// mousemove/click fired immediately after `goto` can race ahead of it and
-// be silently dropped.
-export async function gotoFixture(page, url, { settle = 300 } = {}) {
+// Waits for contentscript.js's own (async) options load to actually finish -
+// it only arms its mousestop-scheduling timer once `options` has loaded, so
+// a mousemove/click fired earlier can race ahead of it and be silently
+// dropped. loadOptions() sets this real completion marker itself (see
+// contentscript.js) since the `options` variable it populates lives in the
+// content script's isolated world, invisible to a main-world page.evaluate().
+export async function waitForOptionsLoaded(page) {
+  await page.waitForFunction(() => document.documentElement.dataset.transoverOptionsLoaded === 'true')
+}
+
+// Navigates to a fixture page and waits for the content script's options
+// load to finish before returning.
+export async function gotoFixture(page, url) {
   // A fresh document is a fresh JS realm - whatever coverage the content
   // script on the current page accumulated has to be read out now, or it's
   // gone the moment we navigate away.
   await dumpPageCoverage(page)
   await page.goto(url)
-  await page.waitForTimeout(settle)
+  await waitForOptionsLoaded(page)
+}
+
+// Each of the functions below finds the popup's shadow-root <main> by
+// grabbing the *last* 'transover-popup' element, not the first: showPopup()
+// in contentscript.js fades the previous popup out asynchronously
+// (removePopup's fadeOut callback) *after* already appending the new one,
+// so both can briefly coexist in the DOM, and jQuery always appends the
+// new one at the end of <body>.
+
+// Removes any leftover translation popup from an earlier action on this
+// page: contentscript.js only clears it as a side effect of a real
+// mousemove or a new translation, and callers of this generally don't want
+// to depend on that mechanism to get to a clean starting point.
+export async function removeStalePopup(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('transover-popup').forEach(el => el.remove())
+  })
 }
 
 // Reads the current translation popup's text out of its shadow DOM.
 export async function getPopupText(page) {
   return page.evaluate(() => {
-    const popup = document.querySelector('transover-popup')
+    const popups = document.querySelectorAll('transover-popup')
+    const popup = popups[popups.length - 1]
     const main = popup && popup.shadowRoot && popup.shadowRoot.querySelector('main')
     return main ? main.innerText.trim() : null
+  })
+}
+
+// Whether the popup's translation block has the rtl styling class
+// (formatTranslation adds it when translating into an rtl language).
+export async function popupHasRtlClass(page) {
+  return page.evaluate(() => {
+    const popups = document.querySelectorAll('transover-popup')
+    const popup = popups[popups.length - 1]
+    const main = popup && popup.shadowRoot && popup.shadowRoot.querySelector('main')
+    const div = main && main.querySelector('.pos_translation')
+    return !!(div && div.classList.contains('rtl'))
   })
 }
 
 // Waits for a (non-empty) translation popup to appear and returns its text.
 export async function waitForPopupText(page, { timeout = 15000 } = {}) {
   await page.waitForFunction(() => {
-    const popup = document.querySelector('transover-popup')
+    const popups = document.querySelectorAll('transover-popup')
+    const popup = popups[popups.length - 1]
     const main = popup && popup.shadowRoot && popup.shadowRoot.querySelector('main')
     return !!(main && main.innerText.trim())
   }, undefined, { timeout })
@@ -78,13 +124,32 @@ export async function waitForPopupText(page, { timeout = 15000 } = {}) {
 // calls that same line directly from the service worker instead. `page`
 // must be the focused tab (manifest.json has no host permission for the
 // fixture server's origin, so tabs.query can't filter by url - it has to
-// find it via activeTab instead).
+// find it via activeTab instead). Also clears any translation popup left
+// over from an earlier action on this page: contentscript.js only clears
+// it as a side effect of a real mousemove or a new translation, so without
+// this a still-showing stale popup can make waitForPopupText() resolve
+// immediately with old content instead of waiting for the translation this
+// call is about to produce.
 export async function openTypeAndTranslate(extension, page) {
+  await removeStalePopup(page)
+  await sendTabMessage(extension, page, 'open_type_and_translate')
+}
+
+// Same trick, for the copy-translation-to-clipboard keyboard command:
+// background.js's chrome.commands.onCommand listener just does
+// `chrome.tabs.sendMessage(activeTab.id, 'copy-translation-to-clipboard')`,
+// which real OS-level keyboard shortcuts aren't reachable from Playwright
+// to trigger, but that one line is.
+export async function copyTranslationToClipboard(extension, page) {
+  await sendTabMessage(extension, page, 'copy-translation-to-clipboard')
+}
+
+async function sendTabMessage(extension, page, message) {
   await page.bringToFront()
-  await extension.serviceWorker.evaluate(async () => {
+  await extension.serviceWorker.evaluate(async (message) => {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-    chrome.tabs.sendMessage(tab.id, 'open_type_and_translate')
-  })
+    chrome.tabs.sendMessage(tab.id, message)
+  }, message)
 }
 
 // Test-isolation helper: resets the except_urls/only_urls lists directly via
@@ -99,18 +164,11 @@ export async function resetUrlLists(extension) {
 
 // Asserts no popup shows up within `wait` ms - used for negative cases
 // (except_urls, disabled everywhere, etc.) where we expect nothing to
-// happen. Removes any popup left over from an earlier translation in the
-// same test file first: contentscript.js only clears an existing popup as
-// a side effect of a real mousemove or a new translation, and this isn't
-// testing that mechanism - relying on it just to get to a clean starting
-// point made this flaky (a stale popup masquerading as "a new one showed
-// up"). Direct removal sidesteps that; the DOM is shared across the page's
-// worlds, so it doesn't matter that the element was created by the content
-// script's isolated world.
-export async function popupStaysEmpty(page, { wait = 2000 } = {}) {
-  await page.evaluate(() => {
-    document.querySelectorAll('transover-popup').forEach(el => el.remove())
-  })
+// happen. Every translate response is a stubbed, same-process
+// route.fulfill() now (see googleStub.mjs), not a real network round trip,
+// so a translation that WAS going to happen shows up in well under this.
+export async function popupStaysEmpty(page, { wait = 300 } = {}) {
+  await removeStalePopup(page)
   await page.waitForTimeout(wait)
   return (await getPopupText(page)) === null
 }

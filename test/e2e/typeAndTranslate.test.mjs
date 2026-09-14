@@ -1,14 +1,15 @@
-import { describe, it, before, after } from 'node:test'
+import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert'
 import {
   launchExtension,
   waitForPopupText,
   popupStaysEmpty,
   gotoFixture,
-  openTypeAndTranslate
+  openTypeAndTranslate,
+  copyTranslationToClipboard
 } from './support/extension.mjs'
 import { startFixtureServer } from './support/fixtureServer.mjs'
-import { openOptions, setTargetLang, saveOptions } from './support/optionsPage.mjs'
+import { openOptions, setTargetLang, setDoNotShowOops, saveOptions } from './support/optionsPage.mjs'
 import { trackContentScriptWorld, flushPage, flushServiceWorker } from './support/coverage.mjs'
 
 describe('type-and-translate popup', () => {
@@ -33,6 +34,19 @@ describe('type-and-translate popup', () => {
     await flushServiceWorker(extension)
     await extension.close()
     await fixtures.close()
+  })
+
+  // Only the do_not_show_oops test below changes this, but resetting it
+  // unconditionally here keeps that reset out of the test itself. The
+  // disable_everywhere test registers its own cleanup instead (see below) -
+  // the "disable on this page" test already exercises and reverts its own
+  // except_urls state as part of testing the idempotent-removal path, so
+  // that one's cleanup stays where it is too.
+  afterEach(async () => {
+    const resetPage = await openOptions(extension.context, extension.optionsUrl)
+    await setDoNotShowOops(resetPage, false)
+    await saveOptions(resetPage)
+    await resetPage.close()
   })
 
   it('opens, translates typed text, and closes on Escape', async () => {
@@ -63,11 +77,33 @@ describe('type-and-translate popup', () => {
     await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
   })
 
+  it('does not truncate a dictionary entry with 5 or fewer meanings', async () => {
+    await openTypeAndTranslate(extension, page)
+    await page.locator('#tat_input').waitFor()
+
+    await page.fill('#tat_input', 'yes')
+    await page.click('#tat_submit')
+
+    const text = await waitForPopupText(page)
+    assert.match(text, /oui/i)
+    assert.doesNotMatch(text, /\.\.\./)
+
+    await page.keyboard.press('Escape')
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
+  })
+
   it('swap_languages swaps the from/to language selects, and the picked language is remembered', async () => {
     await openTypeAndTranslate(extension, page)
     const fromLang = page.locator('#tat_from_lang')
     const toLang = page.locator('#tat_to_lang')
     await fromLang.waitFor()
+
+    // Swapping while from_lang is still "Autodetect" (the default) is a
+    // no-op - the button starts disabled until a real language is picked.
+    assert.strictEqual(await fromLang.inputValue(), 'auto')
+    await page.click('#swap_languages')
+    assert.strictEqual(await fromLang.inputValue(), 'auto')
+    assert.strictEqual(await toLang.inputValue(), 'fr')
 
     // to_lang defaults to the target_lang option we set in before() ('fr').
     // Pick a distinct from_lang so the swap is actually observable, and
@@ -86,6 +122,7 @@ describe('type-and-translate popup', () => {
     await page.click('#tat_submit')
     await waitForPopupText(page)
     await page.keyboard.press('Escape')
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
 
     await openTypeAndTranslate(extension, page)
     await page.locator('#tat_from_lang').waitFor()
@@ -94,6 +131,7 @@ describe('type-and-translate popup', () => {
     // and switching back to "Autodetect" is itself a real, distinct choice
     await page.locator('#tat_from_lang').selectOption('auto')
     await page.keyboard.press('Escape')
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
   })
 
   it('the "disable on this page" checkbox stops translation only on this page, and persists across reopen', async () => {
@@ -115,15 +153,41 @@ describe('type-and-translate popup', () => {
     await page.locator('#disable_on_this_page').waitFor()
     assert.strictEqual(await page.locator('#disable_on_this_page').isChecked(), true)
 
+    // It's already checked, so a real .check() would be a no-op here -
+    // dispatch the 'change' event directly to exercise "already in
+    // except_urls, don't add it twice" (background.js's toggle handler).
+    await page.locator('#disable_on_this_page').evaluate(el => el.dispatchEvent(new Event('change')))
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
+
     // revert and confirm translation actually works again, so this test
     // doesn't leak a blacklisted origin into the rest of the file
+    await openTypeAndTranslate(extension, page)
+    await page.locator('#disable_on_this_page').waitFor()
     await page.locator('#disable_on_this_page').uncheck()
     await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
     await page.click('#word')
     assert.match(await waitForPopupText(page), /cadeau/i)
+
+    // same idempotency check for the removal side: already absent from
+    // except_urls, so this should skip trying to remove it again.
+    await openTypeAndTranslate(extension, page)
+    await page.locator('#disable_on_this_page').waitFor()
+    await page.locator('#disable_on_this_page').evaluate(el => el.dispatchEvent(new Event('change')))
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
   })
 
-  it('the "disable everywhere" checkbox stops translation on the page', async () => {
+  it('the "disable everywhere" checkbox stops translation on the page', async (t) => {
+    // Toggling back off through the same real checkbox (rather than
+    // resetting the underlying storage value directly) matters here, not
+    // just for symmetry: it's the only thing in this suite that exercises
+    // toggle_disable_everywhere's "turn it back off" branch in both
+    // background.js and contentscript.js's postMessage handler.
+    t.after(async () => {
+      await openTypeAndTranslate(extension, page)
+      await page.locator('#disable_everywhere').waitFor()
+      await page.locator('#disable_everywhere').uncheck()
+    })
+
     await openTypeAndTranslate(extension, page)
     const disableEverywhere = page.locator('#disable_everywhere')
     await disableEverywhere.waitFor()
@@ -135,12 +199,66 @@ describe('type-and-translate popup', () => {
 
     await page.click('#word')
     assert.ok(await popupStaysEmpty(page), 'expected no popup once disabled everywhere')
+  })
 
-    // revert, so a later test file launching against a stale profile
-    // wouldn't be affected (each test file launches its own fresh profile
-    // today, but this keeps the file correct on its own terms too)
+  it('opening it again while already open closes it instead', async () => {
     await openTypeAndTranslate(extension, page)
-    await page.locator('#disable_everywhere').waitFor()
-    await page.locator('#disable_everywhere').uncheck()
+    await page.locator('#tat_input').waitFor()
+
+    await openTypeAndTranslate(extension, page)
+    await page.locator('transover-type-and-translate-popup').waitFor({ state: 'detached' })
+  })
+
+  it('shows no popup for untranslatable input when do_not_show_oops is set', async () => {
+    const optionsPage = await openOptions(extension.context, extension.optionsUrl)
+    await setDoNotShowOops(optionsPage, true)
+    await saveOptions(optionsPage)
+    await optionsPage.close()
+
+    await openTypeAndTranslate(extension, page)
+    await page.locator('#tat_input').waitFor()
+    // TAT remembers the last submitted from/to language pair across
+    // reopens - pin both explicitly rather than depend on whatever an
+    // earlier test in this file last left selected.
+    await page.locator('#tat_from_lang').selectOption('auto')
+    await page.locator('#tat_to_lang').selectOption('fr')
+    await page.fill('#tat_input', 'zxqvbnmghjk')
+    await page.click('#tat_submit')
+
+    assert.ok(await popupStaysEmpty(page))
+  })
+
+  it('copies a sentence translation (not a dictionary array) to the clipboard', async () => {
+    await extension.context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: fixtures.baseUrl })
+    await page.evaluate(() => navigator.clipboard.writeText(''))
+
+    await openTypeAndTranslate(extension, page)
+    await page.locator('#tat_input').waitFor()
+    // an earlier test leaves a from/to language pair selected, and TAT
+    // remembers it across reopens - pin both explicitly so this assertion
+    // doesn't depend on that ordering.
+    await page.locator('#tat_from_lang').selectOption('auto')
+    await page.locator('#tat_to_lang').selectOption('fr')
+    await page.fill('#tat_input', 'gifts are yellow')
+    await page.click('#tat_submit')
+    await waitForPopupText(page)
+    await page.keyboard.press('Escape')
+
+    await copyTranslationToClipboard(extension, page)
+    // Same reasoning as translate.test.mjs's clipboard test: the command
+    // reaches the content script via a real cross-process extension
+    // message, so poll the clipboard itself rather than guess a delay.
+    await page.waitForFunction(() => navigator.clipboard.readText().then(text => text.length > 0))
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
+    assert.match(clipboardText, /jaunes/i)
+  })
+
+  it('ignores a window message with an unrecognized type', async () => {
+    await gotoFixture(page, `${fixtures.baseUrl}/word.html`)
+    await page.evaluate(() => window.postMessage({ type: 'not-a-real-message-type' }, '*'))
+
+    // still working normally afterwards
+    await page.click('#word')
+    assert.match(await waitForPopupText(page), /cadeau/i)
   })
 })

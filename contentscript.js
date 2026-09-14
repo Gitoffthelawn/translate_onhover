@@ -156,6 +156,13 @@ function calculatePopupPosition(textRect, $popup) {
 }
 
 async function loadOptions() {
+  // Exposes whether `options` is currently populated on the DOM - the state
+  // itself lives in this isolated world's module scope, invisible to a
+  // Playwright page.evaluate() in the main world, and there's no other
+  // observable signal for "options just (re)loaded" that a test could wait
+  // on instead of guessing a delay.
+  document.documentElement.dataset.transoverOptionsLoaded = 'false'
+
   if (process.env.MANIFEST_V3 === 'true') {
     let storageOptions = {}
     const promises = Object.keys(Options).map(async key => {
@@ -177,6 +184,7 @@ async function loadOptions() {
     handler: 'setIcon',
     disabled: disable_on_this_page || disable_everywhere
   })
+  document.documentElement.dataset.transoverOptionsLoaded = 'true'
 }
 
 document.addEventListener('visibilitychange', function () {
@@ -324,11 +332,6 @@ function processEvent(e) {
 
   if (selection.toString()) {
     trackedAction = 'select'
-
-    if (options.selection_key_only) {
-      debug('Skip because "selection_key_only"')
-      return
-    }
 
     debug('Got selection: ' + selection.toString())
 

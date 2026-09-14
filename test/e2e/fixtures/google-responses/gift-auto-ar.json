@@ -1,0 +1,100 @@
+{
+  "sentences": [
+    {
+      "trans": "هدية",
+      "orig": "gift",
+      "backend": 10
+    }
+  ],
+  "dict": [
+    {
+      "pos": "noun",
+      "terms": [
+        "هدية",
+        "هبة",
+        "عطية",
+        "موهبة",
+        "عطاء منحة",
+        "إنعام"
+      ],
+      "entry": [
+        {
+          "word": "هدية",
+          "reverse_translation": [
+            "gift",
+            "present",
+            "boon",
+            "treat"
+          ],
+          "score": 0.67663383
+        },
+        {
+          "word": "هبة",
+          "reverse_translation": [
+            "gift",
+            "donation",
+            "grant",
+            "endowment",
+            "boon",
+            "bounty"
+          ],
+          "score": 0.041924916
+        },
+        {
+          "word": "عطية",
+          "reverse_translation": [
+            "gift",
+            "gratuity"
+          ],
+          "score": 0.007635094
+        },
+        {
+          "word": "موهبة",
+          "reverse_translation": [
+            "talent",
+            "gift",
+            "knack",
+            "endowment",
+            "flair",
+            "skill"
+          ],
+          "score": 0.0049295872
+        },
+        {
+          "word": "عطاء منحة",
+          "reverse_translation": [
+            "gift",
+            "donation",
+            "present",
+            "grant"
+          ],
+          "score": 0.00010231032
+        },
+        {
+          "word": "إنعام",
+          "reverse_translation": [
+            "conferment",
+            "gift"
+          ],
+          "score": 0.000009818424
+        }
+      ],
+      "base_form": "gift",
+      "pos_enum": 1
+    }
+  ],
+  "src": "en",
+  "confidence": 1,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "en"
+    ],
+    "srclangs_confidences": [
+      1
+    ],
+    "extended_srclangs": [
+      "en"
+    ]
+  }
+}

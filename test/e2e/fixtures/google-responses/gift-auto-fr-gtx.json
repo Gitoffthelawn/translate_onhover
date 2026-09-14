@@ -1,0 +1,111 @@
+{
+  "sentences": [
+    {
+      "trans": "cadeau",
+      "orig": "gift",
+      "backend": 10
+    }
+  ],
+  "dict": [
+    {
+      "pos": "noun",
+      "terms": [
+        "cadeau",
+        "don",
+        "donation",
+        "présent",
+        "talent",
+        "prime"
+      ],
+      "entry": [
+        {
+          "word": "cadeau",
+          "reverse_translation": [
+            "gift",
+            "present",
+            "treat",
+            "prezzie"
+          ],
+          "score": 0.42342663,
+          "previous_word": "le"
+        },
+        {
+          "word": "don",
+          "reverse_translation": [
+            "gift",
+            "donation",
+            "talent",
+            "bestowal",
+            "offering",
+            "charity"
+          ],
+          "score": 0.20001258,
+          "previous_word": "le"
+        },
+        {
+          "word": "donation",
+          "reverse_translation": [
+            "donation",
+            "gift",
+            "contribution",
+            "settlement",
+            "charity",
+            "benefaction"
+          ],
+          "score": 0.00995804,
+          "previous_word": "la"
+        },
+        {
+          "word": "présent",
+          "reverse_translation": [
+            "present",
+            "gift"
+          ],
+          "score": 0.0025574362,
+          "previous_word": "le"
+        },
+        {
+          "word": "talent",
+          "reverse_translation": [
+            "talent",
+            "skill",
+            "flair",
+            "gift",
+            "endowment"
+          ],
+          "score": 0.0017304479,
+          "previous_word": "le"
+        },
+        {
+          "word": "prime",
+          "reverse_translation": [
+            "premium",
+            "bonus",
+            "prime",
+            "bounty",
+            "gift",
+            "gratuity"
+          ],
+          "score": 0.000804733,
+          "previous_word": "la"
+        }
+      ],
+      "base_form": "gift",
+      "pos_enum": 1
+    }
+  ],
+  "src": "en",
+  "confidence": 1,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "en"
+    ],
+    "srclangs_confidences": [
+      1
+    ],
+    "extended_srclangs": [
+      "en"
+    ]
+  }
+}

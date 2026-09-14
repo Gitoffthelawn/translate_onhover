@@ -12,9 +12,5 @@ rm -rf .coverage-e2e-raw coverage/e2e
 COVERAGE=true MANIFEST_V3=true webpack
 
 export E2E_COVERAGE_DIR=.coverage-e2e-raw
-# --test-concurrency=1: each test file launches its own headed Chromium:
-# running all of them at once starves each one of CPU on a modest CI
-# runner, which is exactly the kind of thing that turns a jQuery fadeOut
-# animation or a synthetic mouse-drag selection into a flaky timeout.
-node --import ./test-support/register-hooks.mjs --test --test-concurrency=1 test/e2e/*.test.mjs
+node --import ./test-support/register-hooks.mjs --test test/e2e/*.test.mjs
 node test/e2e/support/reportCoverage.mjs

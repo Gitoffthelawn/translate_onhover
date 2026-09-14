@@ -1,8 +1,8 @@
-import { describe, it, before, after } from 'node:test'
+import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert'
-import { launchExtension, waitForPopupText, gotoFixture } from './support/extension.mjs'
+import { launchExtension, waitForPopupText, popupStaysEmpty, gotoFixture, copyTranslationToClipboard } from './support/extension.mjs'
 import { startFixtureServer } from './support/fixtureServer.mjs'
-import { openOptions, setTargetLang, setTranslateBy, saveOptions } from './support/optionsPage.mjs'
+import { openOptions, setTargetLang, setTranslateBy, setDelay, setDoNotShowOops, saveOptions } from './support/optionsPage.mjs'
 import { trackContentScriptWorld, flushPage, flushServiceWorker } from './support/coverage.mjs'
 
 describe('translate flows', () => {
@@ -28,6 +28,20 @@ describe('translate flows', () => {
     await fixtures.close()
   })
 
+  // Only the hover and do_not_show_oops tests below change these, but
+  // resetting them unconditionally here keeps that reset out of the tests
+  // themselves. translate_by matters beyond just the hover test itself: the
+  // mousemove-debounce timer it interacts with schedules regardless of
+  // translate_by, so leaving it at "point" would also affect the
+  // drag-selection test that follows.
+  afterEach(async () => {
+    const resetPage = await openOptions(extension.context, extension.optionsUrl)
+    await setTranslateBy(resetPage, 'click')
+    await setDoNotShowOops(resetPage, false)
+    await saveOptions(resetPage)
+    await resetPage.close()
+  })
+
   it('translates on click (the default translate_by)', async () => {
     await gotoFixture(page, `${fixtures.baseUrl}/word.html`)
     await page.click('#word')
@@ -36,9 +50,33 @@ describe('translate flows', () => {
     assert.match(text, /cadeau/i)
   })
 
+  it('the copy-translation-to-clipboard command copies the last shown translation', async () => {
+    await extension.context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: fixtures.baseUrl })
+    await page.evaluate(() => navigator.clipboard.writeText(''))
+
+    await copyTranslationToClipboard(extension, page)
+    // The command reaches the content script through a real cross-process
+    // extension message (service worker -> tab), whose delivery isn't
+    // observable from here - poll the clipboard itself instead of guessing
+    // how long that takes.
+    await page.waitForFunction(() => navigator.clipboard.readText().then(text => text.length > 0))
+
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
+    assert.match(clipboardText, /cadeau/i)
+  })
+
   it('translates on hover when translate_by is "point"', async () => {
     const optionsPage = await openOptions(extension.context, extension.optionsUrl)
     await setTranslateBy(optionsPage, 'point')
+    // The real default (700ms) is tuned for a human not to feel like
+    // hovering triggers a translation by accident - nothing here needs
+    // that UX margin. Not 0 though: this delay debounces every mousemove
+    // (regardless of translate_by), so too low lets a drag's synthetic
+    // intermediate mousemove events each fire their own mousestop instead
+    // of being cleared/replaced by the next one - 50ms is comfortably below
+    // "annoyingly slow to a human" and comfortably above the gap between
+    // two synthetic mousemove events in one drag.
+    await setDelay(optionsPage, 50)
     await saveOptions(optionsPage)
     await optionsPage.close()
 
@@ -52,12 +90,6 @@ describe('translate flows', () => {
 
     const text = await waitForPopupText(page)
     assert.match(text, /cadeau/i)
-
-    // put translate_by back to the default for the remaining tests
-    const resetPage = await openOptions(extension.context, extension.optionsUrl)
-    await setTranslateBy(resetPage, 'click')
-    await saveOptions(resetPage)
-    await resetPage.close()
   })
 
   it('translates a text selection', async () => {
@@ -88,5 +120,16 @@ describe('translate flows', () => {
 
     const text = await waitForPopupText(page)
     assert.match(text, /Oops/)
+  })
+
+  it('shows no popup at all for untranslatable input when do_not_show_oops is set', async () => {
+    const optionsPage = await openOptions(extension.context, extension.optionsUrl)
+    await setDoNotShowOops(optionsPage, true)
+    await saveOptions(optionsPage)
+    await optionsPage.close()
+
+    await gotoFixture(page, `${fixtures.baseUrl}/oops.html`)
+    await page.click('#word')
+    assert.ok(await popupStaysEmpty(page))
   })
 })

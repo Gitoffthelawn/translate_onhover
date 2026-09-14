@@ -18,7 +18,8 @@ function blockedErrorMessage(blockExpiresAt) {
 // - click on extension button to show popup
 // - inspect popup to see the requests
 async function translate(word, sl, tl, last_translation, onresponse, isReverseTranslate) {
-  const blockExpiresAt = await localStorage.get('blockExpiresAt') || new Date()
+  const storedBlockExpiresAt = await localStorage.get('blockExpiresAt')
+  const blockExpiresAt = storedBlockExpiresAt ? new Date(storedBlockExpiresAt) : new Date()
   const blockedErrorCount = await localStorage.get('blockedErrorCount') || 0
 
   if (new Date() < blockExpiresAt) {
@@ -51,9 +52,16 @@ async function translate(word, sl, tl, last_translation, onresponse, isReverseTr
       console.error(response)
 
       if (response.status == 429) {
-        await chrome.storage.sync.set({blockExpiresAt: addMilliseconds(new Date(), blockTimeoutMs), blockedErrorCount: 1})
-        return {message: blockedErrorMessage(blockExpiresAt), error: true}
+        const newBlockExpiresAt = addMilliseconds(new Date(), blockTimeoutMs)
+        // chrome.storage.local.set() only copies own enumerable
+        // properties, which silently turns a raw Date into {} - store its
+        // epoch millis instead, `new Date(...)` reconstructs it fine.
+        await localStorage.set('blockExpiresAt', newBlockExpiresAt.getTime())
+        await localStorage.set('blockedErrorCount', 1)
+        return {message: blockedErrorMessage(newBlockExpiresAt), error: true}
       }
+
+      return {message: `Translation request failed with status ${response.status}.`, error: true}
     }
   }
 
@@ -212,7 +220,10 @@ async function contentScriptListener(request) {
 }
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  contentScriptListener(request).then(sendResponse)
+  contentScriptListener(request).then(
+    sendResponse,
+    error => sendResponse({message: error.message, error: true})
+  )
   // Without this, firefox sends empty async response
   // Details: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/onMessage
   return true

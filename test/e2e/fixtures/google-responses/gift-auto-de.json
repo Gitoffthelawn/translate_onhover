@@ -1,0 +1,101 @@
+{
+  "sentences": [
+    {
+      "trans": "Geschenk",
+      "orig": "gift",
+      "backend": 10
+    }
+  ],
+  "dict": [
+    {
+      "pos": "noun",
+      "terms": [
+        "Geschenk",
+        "Gabe",
+        "Schenkung",
+        "Begabung",
+        "Spende",
+        "Präsent"
+      ],
+      "entry": [
+        {
+          "word": "Geschenk",
+          "reverse_translation": [
+            "gift",
+            "present"
+          ],
+          "score": 0.40403652,
+          "previous_word": "das"
+        },
+        {
+          "word": "Gabe",
+          "reverse_translation": [
+            "gift",
+            "present",
+            "donation"
+          ],
+          "score": 0.05299806,
+          "previous_word": "die"
+        },
+        {
+          "word": "Schenkung",
+          "reverse_translation": [
+            "gift"
+          ],
+          "score": 0.004703845,
+          "previous_word": "die"
+        },
+        {
+          "word": "Begabung",
+          "reverse_translation": [
+            "talent",
+            "gift",
+            "aptitude",
+            "endowment",
+            "vocation",
+            "capability"
+          ],
+          "score": 0.0033880526,
+          "previous_word": "die"
+        },
+        {
+          "word": "Spende",
+          "reverse_translation": [
+            "donation",
+            "contribution",
+            "gift",
+            "benefaction",
+            "purse"
+          ],
+          "score": 0.002638618,
+          "previous_word": "die"
+        },
+        {
+          "word": "Präsent",
+          "reverse_translation": [
+            "present",
+            "gift"
+          ],
+          "score": 0.0014345917,
+          "previous_word": "das"
+        }
+      ],
+      "base_form": "gift",
+      "pos_enum": 1
+    }
+  ],
+  "src": "en",
+  "confidence": 1,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "en"
+    ],
+    "srclangs_confidences": [
+      1
+    ],
+    "extended_srclangs": [
+      "en"
+    ]
+  }
+}

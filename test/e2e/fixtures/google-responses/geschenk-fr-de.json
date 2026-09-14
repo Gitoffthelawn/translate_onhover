@@ -1,0 +1,41 @@
+{
+  "sentences": [
+    {
+      "trans": "Geschenk",
+      "orig": "Geschenk",
+      "backend": 3,
+      "model_specification": [
+        {},
+        {}
+      ],
+      "translation_engine_debug_info": [
+        {
+          "model_tracking": {
+            "checkpoint_md5": "8735bd792ef0a942ca930eb98ea0a745",
+            "launch_doc": "fr_en_2023q1.md"
+          }
+        },
+        {
+          "model_tracking": {
+            "checkpoint_md5": "84d48e73ebfa38d4d681515b81e0b72a",
+            "launch_doc": "en_de_2023q1.md"
+          }
+        }
+      ]
+    }
+  ],
+  "src": "fr",
+  "confidence": 0.78125,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "de"
+    ],
+    "srclangs_confidences": [
+      0.78125
+    ],
+    "extended_srclangs": [
+      "de"
+    ]
+  }
+}

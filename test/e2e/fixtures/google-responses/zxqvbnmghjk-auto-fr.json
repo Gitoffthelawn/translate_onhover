@@ -1,0 +1,41 @@
+{
+  "sentences": [
+    {
+      "trans": "zxqvbnmghjk",
+      "orig": "zxqvbnmghjk",
+      "backend": 3,
+      "model_specification": [
+        {},
+        {}
+      ],
+      "translation_engine_debug_info": [
+        {
+          "model_tracking": {
+            "checkpoint_md5": "1eb561d2d816b8957a38cd5018eb164c",
+            "launch_doc": "tea_AllEn_2022q2.md"
+          }
+        },
+        {
+          "model_tracking": {
+            "checkpoint_md5": "de81a00dcd67a045aa256d103baac836",
+            "launch_doc": "en_fr_2023q1.md"
+          }
+        }
+      ]
+    }
+  ],
+  "src": "ig",
+  "confidence": 0.49341944,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "ig"
+    ],
+    "srclangs_confidences": [
+      0.49341944
+    ],
+    "extended_srclangs": [
+      "ig"
+    ]
+  }
+}

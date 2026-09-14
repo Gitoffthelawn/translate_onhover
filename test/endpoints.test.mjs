@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, after } from 'node:test'
+import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
 import { chromium } from 'playwright'
 import { generateUrls, parseResponse } from '../lib/apiClient.mjs'
@@ -14,11 +14,10 @@ import { generateUrls, parseResponse } from '../lib/apiClient.mjs'
 let browser
 
 beforeEach(async () => {
-  await browser?.close()
   browser = await chromium.launch()
 })
 
-after(async () => {
+afterEach(async () => {
   await browser?.close()
 })
 

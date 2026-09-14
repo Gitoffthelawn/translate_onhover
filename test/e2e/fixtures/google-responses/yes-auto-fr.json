@@ -1,0 +1,44 @@
+{
+  "sentences": [
+    {
+      "trans": "Oui",
+      "orig": "yes",
+      "backend": 10
+    }
+  ],
+  "dict": [
+    {
+      "pos": "particle",
+      "terms": [
+        "oui"
+      ],
+      "entry": [
+        {
+          "word": "oui",
+          "reverse_translation": [
+            "yes",
+            "yeah",
+            "yep"
+          ],
+          "score": 0.655816
+        }
+      ],
+      "base_form": "yes",
+      "pos_enum": 19
+    }
+  ],
+  "src": "en",
+  "confidence": 1,
+  "spell": {},
+  "ld_result": {
+    "srclangs": [
+      "en"
+    ],
+    "srclangs_confidences": [
+      1
+    ],
+    "extended_srclangs": [
+      "en"
+    ]
+  }
+}

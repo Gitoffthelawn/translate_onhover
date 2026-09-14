@@ -71,11 +71,7 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      # Loading an unpacked MV3 extension needs a headed browser - Chromium's
-      # headless mode never starts the extension's service worker - so this
-      # runs under a virtual display instead.
-      - run: xvfb-run --auto-servernum yarn test:e2e:coverage
+      - run: yarn test:e2e:coverage
       - uses: actions/upload-artifact@v4
         if: always()
         with:

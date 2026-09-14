@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert'
-import { launchExtension, waitForPopupText, gotoFixture } from './support/extension.mjs'
+import { launchExtension, waitForPopupText, popupStaysEmpty, gotoFixture } from './support/extension.mjs'
 import { startFixtureServer } from './support/fixtureServer.mjs'
 import { openOptions, setTargetLang, saveOptions } from './support/optionsPage.mjs'
 import { trackContentScriptWorld, flushPage, flushServiceWorker } from './support/coverage.mjs'
@@ -45,22 +45,18 @@ describe('rate-limit backoff', () => {
     assert.match(text, /too many requests/i)
   })
 
-  // NOTE: background.js's block bookkeeping has a real bug we found while
-  // writing this test - it reads blockExpiresAt/blockedErrorCount from
-  // chrome.storage.local (via lib/storage.js's `localStorage` helper) but,
-  // on an actual 429, writes the new blockExpiresAt to chrome.storage.sync
-  // instead (a raw `chrome.storage.sync.set(...)` call in background.js,
-  // bypassing the storage helpers). So the "go quiet for 30 minutes after
-  // 3 blocked attempts" behavior never actually engages: every subsequent
-  // request re-reads an untouched local blockExpiresAt and just hits the
-  // API again. That's why this asserts the same message twice rather than
-  // a suppressed/empty second response - it's pinning down real current
-  // behavior, not the intended one. Once that storage mismatch is fixed,
-  // this second assertion should change to expect a suppressed response.
-  it('a second attempt during the "block" window still just re-hits the API today', async () => {
+  // background.js's block bookkeeping only shows the message on every 3rd
+  // blocked attempt (checked against the count *before* incrementing, so
+  // it's attempts 1, 4, 7, ... that speak up) - everything in between is
+  // silently suppressed rather than re-hitting the API.
+  it('further attempts during the block window are silent, except every 3rd', async () => {
     await page.click('#word')
+    assert.ok(await popupStaysEmpty(page), 'expected no popup on the 2nd blocked attempt')
 
-    const text = await waitForPopupText(page)
-    assert.match(text, /too many requests/i)
+    await page.click('#word')
+    assert.ok(await popupStaysEmpty(page), 'expected no popup on the 3rd blocked attempt')
+
+    await page.click('#word')
+    assert.match(await waitForPopupText(page), /too many requests/i)
   })
 })
